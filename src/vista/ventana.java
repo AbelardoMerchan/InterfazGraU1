@@ -285,10 +285,17 @@ public class ventana extends JFrame {
         panelContactos.add(barraProgreso);
 
         // Tabla de contactos
-        modeloTabla = new DefaultTableModel(
-            new String[]{"Nombre","Teléfono","Email","Categoría","Favorito"}, 0
-        );
+     // Cabeceras localizadas
+        String[] columnas = {
+            mensajes.getString("col_nombre"),
+            mensajes.getString("col_telefono"),
+            mensajes.getString("col_email"),
+            mensajes.getString("col_categoria"),
+            mensajes.getString("col_favorito")
+        };
+        modeloTabla = new DefaultTableModel(columnas, 0);
         tablaContactos = new JTable(modeloTabla);
+
         tablaContactos.setFont(fuenteGeneral);
         tablaContactos.setRowHeight(25);
         tablaContactos.setGridColor(new Color(230,230,230));
