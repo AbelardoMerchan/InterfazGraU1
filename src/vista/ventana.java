@@ -30,6 +30,8 @@ import javax.swing.JOptionPane;
 import controlador.logica_ventana;
 import java.io.FileWriter;
 import java.io.IOException;
+import javax.swing.SwingUtilities;
+
 
 public class ventana extends JFrame {
 
@@ -51,34 +53,76 @@ public class ventana extends JFrame {
     public JButton btn_exportar;                 // Botón para exportar contactos a CSV
     public JComboBox<String> cmb_idioma;         // Combo para selección de idioma
     public JScrollPane scrLista;                 // Panel de desplazamiento para la tabla de contactos
+    public JLabel lbl_notificacion; // Etiqueta para mostrar notificaciones
 
     private ResourceBundle mensajes;
+    
+    /**
+     * Muestra una notificación temporal debajo de la barra de progreso.
+     */
+    public void mostrarNotificacion(String mensaje) {
+        new Thread(() -> {
+        	SwingUtilities.invokeLater(() -> {
+        	    try {
+        	        lbl_notificacion.setText(mensaje);
+        	    } catch (Exception ex) {
+        	        ex.printStackTrace(); 
+        	    }
+        	});
+
+            try {
+                Thread.sleep(3000); // Muestra por 3 segundos
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    lbl_notificacion.setText("");
+                } catch (Exception ex) {
+                    ex.printStackTrace(); // 
+                }
+            });
+
+        }).start();
+    }
+
 
     /**
      * Exporta la tabla de contactos a un archivo CSV.
      */
-    public void exportarCSV() {
-        try {
-            FileWriter writer = new FileWriter("contactos.csv");
-            // Escribir cabeceras
-            for (int i = 0; i < modeloTabla.getColumnCount(); i++) {
-                writer.write(modeloTabla.getColumnName(i) + ",");
-            }
-            writer.write("\n");
-            // Escribir filas
-            for (int i = 0; i < modeloTabla.getRowCount(); i++) {
-                for (int j = 0; j < modeloTabla.getColumnCount(); j++) {
-                    writer.write(modeloTabla.getValueAt(i, j).toString() + ",");
+    public synchronized void exportarCSV() {
+        new javax.swing.SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() {
+                try (FileWriter writer = new FileWriter("contactos.csv")) {
+                    // Escribir cabeceras
+                    for (int i = 0; i < modeloTabla.getColumnCount(); i++) {
+                        writer.write(modeloTabla.getColumnName(i) + ",");
+                    }
+                    writer.write("\n");
+                    // Escribir filas
+                    for (int i = 0; i < modeloTabla.getRowCount(); i++) {
+                        for (int j = 0; j < modeloTabla.getColumnCount(); j++) {
+                            writer.write(modeloTabla.getValueAt(i, j).toString() + ",");
+                        }
+                        writer.write("\n");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(ventana.this, "Error al exportar el archivo.");
+                    });
                 }
-                writer.write("\n");
+                return null;
             }
-            writer.close();
-            JOptionPane.showMessageDialog(this, "Contactos exportados exitosamente.");
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Error al exportar el archivo.");
-            e.printStackTrace();
-        }
+
+            @Override
+            protected void done() {
+                JOptionPane.showMessageDialog(ventana.this, "Contactos exportados exitosamente.");
+            }
+        }.execute();
     }
+
 
     /**
      * Launch the application.
@@ -283,6 +327,13 @@ public class ventana extends JFrame {
         barraProgreso.setBounds(25, 610, 971, 20);
         barraProgreso.setStringPainted(true);
         panelContactos.add(barraProgreso);
+        
+     // Etiqueta de notificación
+        lbl_notificacion = new JLabel("");
+        lbl_notificacion.setBounds(25, 635, 971, 20);
+        lbl_notificacion.setFont(new Font("Segoe UI", Font.ITALIC, 13));
+        lbl_notificacion.setForeground(new Color(0, 128, 0)); // Verde
+        panelContactos.add(lbl_notificacion);
 
         // Tabla de contactos
      // Cabeceras localizadas
