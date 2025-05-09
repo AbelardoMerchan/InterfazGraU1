@@ -38,12 +38,14 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         configurarBusqueda(); // Añade búsqueda en segundo plano
     }
 
+    // Inicializa las variables con los datos ingresados en la GUI
     private void incializacionCampos() {
         nombres = delegado.txt_nombres.getText();
         email = delegado.txt_email.getText();
         telefono = delegado.txt_telefono.getText();
     }
 
+    // Carga los contactos desde archivo y los muestra en la tabla
     private void cargarContactosRegistrados() {
         try {
             contactos = new personaDAO(new persona()).leerArchivo();
@@ -74,6 +76,7 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         }
     }
 
+    // Limpia los campos y recarga la lista de contactos
     private void limpiarCampos() {
         delegado.txt_nombres.setText("");
         delegado.txt_telefono.setText("");
@@ -86,39 +89,40 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         cargarContactosRegistrados();
     }
 
+    // Maneja los eventos de los botones agregar, eliminar y modificar
     @Override
     public void actionPerformed(ActionEvent e) {
         incializacionCampos();
         if (e.getSource() == delegado.btn_add) {
             if ((!nombres.equals("")) && (!telefono.equals("")) && (!email.equals(""))) {
                 if ((!categoria.equals("Elija una Categoria")) && (!categoria.equals(""))) {
-                    // Validación concurrente de duplicados antes de guardar
                     new Thread(() -> {
-                        synchronized (bloqueoModificacion) {
-                            boolean duplicado = contactos.stream().anyMatch(p ->
-                                p.getNombre().equalsIgnoreCase(nombres) &&
+                        try {
+                            List<persona> listaActual = new personaDAO(null).leerArchivo();
+                            // Validar si ya existe un contacto con el mismo nombre o teléfono
+                            boolean duplicado = listaActual.stream().anyMatch(p ->
+                                p.getNombre().equalsIgnoreCase(nombres) ||
                                 p.getTelefono().equalsIgnoreCase(telefono));
 
                             if (duplicado) {
                                 SwingUtilities.invokeLater(() -> {
-                                    JOptionPane.showMessageDialog(delegado, "El contacto ya está registrado.");
+                                    JOptionPane.showMessageDialog(delegado, "El contacto ya está registrado (nombre o teléfono).");
                                 });
                             } else {
                                 persona nuevo = new persona(nombres, telefono, email, categoria, favorito);
-                                contactos.add(nuevo); // Agrega a la lista actualizada en memoria
-                                try {
-                                    new personaDAO(null).sobrescribirArchivo(contactos); // Guarda la lista actualizada
-                                    SwingUtilities.invokeLater(() -> {
-                                        limpiarCampos();
-                                        delegado.mostrarNotificacion("Contacto guardado con éxito");
-                                    });
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                    SwingUtilities.invokeLater(() -> {
-                                        JOptionPane.showMessageDialog(delegado, "Error al guardar el contacto.");
-                                    });
-                                }
+                                listaActual.add(nuevo);
+                                new personaDAO(null).sobrescribirArchivo(listaActual);
+                                contactos = listaActual; // Actualiza la lista en memoria
+                                SwingUtilities.invokeLater(() -> {
+                                    limpiarCampos();
+                                    delegado.mostrarNotificacion("Contacto guardado con éxito");
+                                });
                             }
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
+                            SwingUtilities.invokeLater(() -> {
+                                JOptionPane.showMessageDialog(delegado, "Error al guardar el contacto.");
+                            });
                         }
                     }).start();
                 } else {
@@ -128,13 +132,12 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
                 JOptionPane.showMessageDialog(delegado, "Todos los campos deben ser llenados!!!");
             }
         } else if (e.getSource() == delegado.btn_eliminar) {
-            // Eliminar contacto de la tabla, lista y archivo
             int fila = delegado.tablaContactos.getSelectedRow();
             if (fila != -1) {
-                contactos.remove(fila); // Elimina de la lista en memoria
-                ((DefaultTableModel) delegado.tablaContactos.getModel()).removeRow(fila); // Elimina de la tabla
+                contactos.remove(fila);
+                ((DefaultTableModel) delegado.tablaContactos.getModel()).removeRow(fila);
                 try {
-                    new personaDAO(new persona()).sobrescribirArchivo(contactos); // Actualiza archivo
+                    new personaDAO(new persona()).sobrescribirArchivo(contactos);
                     delegado.mostrarNotificacion("Contacto eliminado con éxito");
                 } catch (IOException ex) {
                     ex.printStackTrace();
@@ -144,11 +147,11 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
                 JOptionPane.showMessageDialog(delegado, "Seleccione un contacto para eliminar.");
             }
         } else if (e.getSource() == delegado.btn_modificar) {
-            modificarContacto(); // Llamada a función protegida por sincronización
+            modificarContacto();
         }
     }
 
-    // Método protegido para modificar contactos usando synchronized para evitar conflictos
+    // Modifica un contacto en base a la fila seleccionada
     private void modificarContacto() {
         new Thread(() -> {
             synchronized (bloqueoModificacion) {
@@ -161,7 +164,8 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
                     boolean nuevoFavorito = delegado.chb_favorito.isSelected();
 
                     try {
-                        for (persona p : contactos) {
+                        List<persona> lista = new personaDAO(new persona()).leerArchivo();
+                        for (persona p : lista) {
                             if (p.getNombre().equalsIgnoreCase(nombreSeleccionado)) {
                                 p.setTelefono(nuevoTelefono);
                                 p.setEmail(nuevoEmail);
@@ -170,8 +174,8 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
                                 break;
                             }
                         }
-                        new personaDAO(null).sobrescribirArchivo(contactos);
-
+                        new personaDAO(null).sobrescribirArchivo(lista);
+                        contactos = lista; // Actualiza en memoria también
                         SwingUtilities.invokeLater(() -> {
                             limpiarCampos();
                             delegado.mostrarNotificacion("Contacto modificado con éxito");
@@ -188,6 +192,7 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         }).start();
     }
 
+    // Carga los datos del contacto seleccionado a los campos
     @Override
     public void valueChanged(ListSelectionEvent e) {
         if (!e.getValueIsAdjusting()) {
@@ -198,6 +203,7 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         }
     }
 
+    // Asigna los valores del contacto a los campos de texto
     private void cargarContacto(int index) {
         delegado.txt_nombres.setText(contactos.get(index).getNombre());
         delegado.txt_telefono.setText(contactos.get(index).getTelefono());
@@ -206,6 +212,7 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         delegado.cmb_categoria.setSelectedItem(contactos.get(index).getCategoria());
     }
 
+    // Maneja los cambios de selección en ComboBox y CheckBox
     @Override
     public void itemStateChanged(ItemEvent e) {
         if (e.getSource() == delegado.cmb_categoria) {
@@ -215,7 +222,7 @@ public class logica_ventana implements ActionListener, ListSelectionListener, It
         }
     }
 
-    // Búsqueda en segundo plano usando SwingWorker
+    // Configura la búsqueda en segundo plano usando SwingWorker
     private void configurarBusqueda() {
         delegado.txt_buscar.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyReleased(java.awt.event.KeyEvent evt) {
